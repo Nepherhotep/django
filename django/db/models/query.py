@@ -847,7 +847,9 @@ class QuerySet(object):
         if fields == (None,):
             obj.query.select_related = False
         elif fields:
-            obj.query.add_select_related(fields)
+            # convert F objects to string representation first, if any
+            string_fields = map(lambda f: f.name if isinstance(f, F) else f, fields)
+            obj.query.add_select_related(string_fields)
         else:
             obj.query.select_related = True
         return obj
@@ -866,7 +868,11 @@ class QuerySet(object):
         if lookups == (None,):
             clone._prefetch_related_lookups = []
         else:
-            clone._prefetch_related_lookups.extend(lookups)
+            for lookup in lookups:
+                if isinstance(lookup, F):
+                    clone._prefetch_related_lookups.append(lookup.name)
+                else:
+                    clone._prefetch_related_lookups.append(lookup)
         return clone
 
     def annotate(self, *args, **kwargs):
