@@ -661,6 +661,24 @@ class Col(Expression):
                 self.target.get_db_converters(connection))
 
 
+class FieldExpression(Expression):
+    """
+    Does nothing, but showing field
+    """
+    template = '%(output_field)s'
+
+    def __init__(self, f_object):
+        """
+        :type f_object: F
+        """
+        super(Expression, self).__init__()
+        self._f_object = f_object
+        self._output_field = fields.Field()
+
+    def as_sql(self, compiler, connection):
+        return self.template % self._f_object.resolve_expression(compiler.query), []
+
+
 class Ref(Expression):
     """
     Reference to column alias of the query. For example, Ref('sum_cost') in

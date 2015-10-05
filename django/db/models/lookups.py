@@ -1,7 +1,7 @@
 from copy import copy
 
 from django.conf import settings
-from django.db.models.expressions import Func, Value
+from django.db.models.expressions import Func, Value, Expression, F, FieldExpression
 from django.db.models.fields import (
     DateField, DateTimeField, Field, IntegerField, TimeField,
 )
@@ -11,11 +11,11 @@ from django.utils.functional import cached_property
 from django.utils.six.moves import range
 
 
-class Lookup(object):
+class Lookup(Expression):
     lookup_name = None
 
     def __init__(self, lhs, rhs):
-        self.lhs, self.rhs = lhs, rhs
+        self.lhs, self.rhs = self.cast_lhs_type(lhs), rhs
         self.rhs = self.get_prep_lookup()
         if hasattr(self.lhs, 'get_bilateral_transforms'):
             bilateral_transforms = self.lhs.get_bilateral_transforms()
@@ -29,6 +29,12 @@ class Lookup(object):
             if isinstance(rhs, QuerySet):
                 raise NotImplementedError("Bilateral transformations on nested querysets are not supported.")
         self.bilateral_transforms = bilateral_transforms
+
+    def cast_lhs_type(self, lhs):
+        if isinstance(lhs, F):
+            # wrap F object as field expression
+            return FieldExpression(lhs)
+        return lhs
 
     def apply_bilateral_transforms(self, value):
         for transform in self.bilateral_transforms:

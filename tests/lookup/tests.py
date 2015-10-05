@@ -7,6 +7,7 @@ from unittest import skipUnless
 
 from django.core.exceptions import FieldError
 from django.db import connection
+from django.db.models import lookups, F, Value
 from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
 
 from .models import Article, Author, Game, MyISAMArticle, Player, Season, Tag
@@ -665,7 +666,6 @@ class LookupTests(TestCase):
         types ('year', 'gt', 'range', 'in' etc.).
         Refs #11670.
         """
-
         # Here we're using 'gt' as a code number for the year, e.g. 111=>2009.
         season_2009 = Season.objects.create(year=2009, gt=111)
         season_2009.games.create(home="Houston Astros", away="St. Louis Cardinals")
@@ -751,6 +751,13 @@ class LookupTests(TestCase):
              '<Article: Article 7>'],
             ordered=False
         )
+
+    def test_direct_lookup_init(self):
+        """
+        Do sanity check
+        :return:
+        """
+        lookup = lookups.GreaterThan(F('id'), Value(10))
 
 
 class LookupTransactionTests(TransactionTestCase):
