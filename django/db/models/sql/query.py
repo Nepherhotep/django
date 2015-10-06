@@ -14,6 +14,7 @@ from string import ascii_uppercase
 
 from django.core.exceptions import FieldDoesNotExist, FieldError
 from django.db import DEFAULT_DB_ALIAS, connections
+from django.db.models import lookups, expressions
 from django.db.models.aggregates import Count
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.expressions import Col, Ref
@@ -1073,7 +1074,7 @@ class Query(object):
                 for v in value:
                     self.check_query_object_type(v, opts, field)
 
-    def build_lookup(self, lookups, lhs, rhs):
+    def build_lookup(self, lookups_list, lhs, rhs):
         """
         Tries to extract transforms and lookup from given lhs.
 
@@ -1082,23 +1083,23 @@ class Query(object):
         The lookups is a list of names to extract using get_lookup()
         and get_transform().
         """
-        lookups = lookups[:]
-        while lookups:
-            name = lookups[0]
+        lookups_list = lookups_list[:]
+        while lookups_list:
+            name = lookups_list[0]
             # If there is just one part left, try first get_lookup() so
             # that if the lhs supports both transform and lookup for the
             # name, then lookup will be picked.
-            if len(lookups) == 1:
+            if len(lookups_list) == 1:
                 final_lookup = lhs.get_lookup(name)
                 if not final_lookup:
                     # We didn't find a lookup. We are going to interpret
                     # the name as transform, and do an Exact lookup against
                     # it.
-                    lhs = self.try_transform(lhs, name, lookups)
+                    lhs = self.try_transform(lhs, name, lookups_list)
                     final_lookup = lhs.get_lookup('exact')
                 return final_lookup(lhs, rhs)
-            lhs = self.try_transform(lhs, name, lookups)
-            lookups = lookups[1:]
+            lhs = self.try_transform(lhs, name, lookups_list)
+            lookups_list = lookups_list[1:]
 
     def try_transform(self, lhs, name, rest_of_lookups):
         """
@@ -1143,20 +1144,37 @@ class Query(object):
         """
         if isinstance(filter_expr, dict):
             raise FieldError("Cannot parse keyword query as dict")
+
+        if isinstance(filter_expr, lookups.Lookup):
+            return self._build_object_filter(filter_expr)
+        elif isinstance(filter_expr, expressions.Expression):
+            raise FieldError("Can't build filter upon Expression, not wrapped with Lookup")
+        else:
+            return self._build_kw_filter(filter_expr)
+
+    def _build_object_filter(self, lookup, branch_negated=False,
+                             current_negated=False, can_reuse=None,
+                             connector=AND, allow_joins=True, split_subq=True):
+        pass
+
+    def _build_kw_filter(self, filter_expr, branch_negated=False,
+                         current_negated=False, can_reuse=None, connector=AND,
+                         allow_joins=True, split_subq=True):
         arg, value = filter_expr
         if not arg:
             raise FieldError("Cannot parse keyword query %r" % arg)
-        lookups, parts, reffed_expression = self.solve_lookup_type(arg)
+
+        lookups_list, parts, reffed_expression = self.solve_lookup_type(arg)
         if not allow_joins and len(parts) > 1:
             raise FieldError("Joined field references are not permitted in this query")
 
         # Work out the lookup type and remove it from the end of 'parts',
         # if necessary.
-        value, lookups, used_joins = self.prepare_lookup_value(value, lookups, can_reuse, allow_joins)
+        value, lookups_list, used_joins = self.prepare_lookup_value(value, lookups_list, can_reuse, allow_joins)
 
         clause = self.where_class()
         if reffed_expression:
-            condition = self.build_lookup(lookups, reffed_expression, value)
+            condition = self.build_lookup(lookups_list, reffed_expression, value)
             clause.add(condition, AND)
             return clause, []
 
@@ -1187,8 +1205,8 @@ class Query(object):
 
         if field.is_relation:
             # No support for transforms for relational fields
-            assert len(lookups) == 1
-            lookup_class = field.get_lookup(lookups[0])
+            assert len(lookups_list) == 1
+            lookup_class = field.get_lookup(lookups_list[0])
             if len(targets) == 1:
                 lhs = targets[0].get_col(alias, field)
             else:
@@ -1197,7 +1215,7 @@ class Query(object):
             lookup_type = lookup_class.lookup_name
         else:
             col = targets[0].get_col(alias, field)
-            condition = self.build_lookup(lookups, col, value)
+            condition = self.build_lookup(lookups_list, col, value)
             lookup_type = condition.lookup_name
 
         clause.add(condition, AND)

@@ -757,7 +757,11 @@ class LookupTests(TestCase):
         Do sanity check
         :return:
         """
-        lookup = lookups.GreaterThan(F('id'), Value(10))
+        lookup = lookups.GreaterThan(F('id'), Value(5))
+        self.assertQuerysetEqual(
+            Article.objects.filter(lookup),
+            ['<Article: Article 6>']
+        )
 
 
 class LookupTransactionTests(TransactionTestCase):
