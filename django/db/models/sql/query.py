@@ -21,7 +21,7 @@ from django.db.models.expressions import Col, Ref
 from django.db.models.fields.related_lookups import MultiColSource
 from django.db.models.query_utils import (
     Q, PathInfo, check_rel_lookup_compatibility, refs_expression,
-)
+    QueryKeywordLookupHelper, QueryObjectLookupHelper)
 from django.db.models.sql.constants import (
     INNER, LOUTER, ORDER_DIR, ORDER_PATTERN, QUERY_TERMS, SINGLE,
 )
@@ -989,61 +989,6 @@ class Query(object):
         self.append_annotation_mask([alias])
         self.annotations[alias] = annotation
 
-    def prepare_lookup_value(self, value, lookups, can_reuse, allow_joins=True):
-        # Default lookup if none given is exact.
-        used_joins = []
-        if len(lookups) == 0:
-            lookups = ['exact']
-        # Interpret '__exact=None' as the sql 'is NULL'; otherwise, reject all
-        # uses of None as a query value.
-        if value is None:
-            if lookups[-1] not in ('exact', 'iexact'):
-                raise ValueError("Cannot use None as a query value")
-            lookups[-1] = 'isnull'
-            value = True
-        elif hasattr(value, 'resolve_expression'):
-            pre_joins = self.alias_refcount.copy()
-            value = value.resolve_expression(self, reuse=can_reuse, allow_joins=allow_joins)
-            used_joins = [k for k, v in self.alias_refcount.items() if v > pre_joins.get(k, 0)]
-        # Subqueries need to use a different set of aliases than the
-        # outer query. Call bump_prefix to change aliases of the inner
-        # query (the value).
-        if hasattr(value, 'query') and hasattr(value.query, 'bump_prefix'):
-            value = value._clone()
-            value.query.bump_prefix(self)
-        if hasattr(value, 'bump_prefix'):
-            value = value.clone()
-            value.bump_prefix(self)
-        # For Oracle '' is equivalent to null. The check needs to be done
-        # at this stage because join promotion can't be done at compiler
-        # stage. Using DEFAULT_DB_ALIAS isn't nice, but it is the best we
-        # can do here. Similar thing is done in is_nullable(), too.
-        if (connections[DEFAULT_DB_ALIAS].features.interprets_empty_strings_as_nulls and
-                lookups[-1] == 'exact' and value == ''):
-            value = True
-            lookups[-1] = 'isnull'
-        return value, lookups, used_joins
-
-    def solve_lookup_type(self, lookup):
-        """
-        Solve the lookup type from the lookup (eg: 'foobar__id__icontains')
-        """
-        lookup_splitted = lookup.split(LOOKUP_SEP)
-        if self._annotations:
-            expression, expression_lookups = refs_expression(lookup_splitted, self.annotations)
-            if expression:
-                return expression_lookups, (), expression
-        _, field, _, lookup_parts = self.names_to_path(lookup_splitted, self.get_meta())
-        field_parts = lookup_splitted[0:len(lookup_splitted) - len(lookup_parts)]
-        if len(lookup_parts) == 0:
-            lookup_parts = ['exact']
-        elif len(lookup_parts) > 1:
-            if not field_parts:
-                raise FieldError(
-                    'Invalid lookup "%s" for model %s".' %
-                    (lookup, self.get_meta().model.__name__))
-        return lookup_parts, field_parts, False
-
     def check_query_object_type(self, value, opts, field):
         """
         Checks whether the object passed while querying is of the correct type.
@@ -1073,33 +1018,6 @@ class Query(object):
             elif hasattr(value, '__iter__'):
                 for v in value:
                     self.check_query_object_type(v, opts, field)
-
-    def build_lookup(self, lookups_list, lhs, rhs):
-        """
-        Tries to extract transforms and lookup from given lhs.
-
-        The lhs value is something that works like SQLExpression.
-        The rhs value is what the lookup is going to compare against.
-        The lookups is a list of names to extract using get_lookup()
-        and get_transform().
-        """
-        lookups_list = lookups_list[:]
-        while lookups_list:
-            name = lookups_list[0]
-            # If there is just one part left, try first get_lookup() so
-            # that if the lhs supports both transform and lookup for the
-            # name, then lookup will be picked.
-            if len(lookups_list) == 1:
-                final_lookup = lhs.get_lookup(name)
-                if not final_lookup:
-                    # We didn't find a lookup. We are going to interpret
-                    # the name as transform, and do an Exact lookup against
-                    # it.
-                    lhs = self.try_transform(lhs, name, lookups_list)
-                    final_lookup = lhs.get_lookup('exact')
-                return final_lookup(lhs, rhs)
-            lhs = self.try_transform(lhs, name, lookups_list)
-            lookups_list = lookups_list[1:]
 
     def try_transform(self, lhs, name, rest_of_lookups):
         """
@@ -1146,98 +1064,16 @@ class Query(object):
             raise FieldError("Cannot parse keyword query as dict")
 
         if isinstance(filter_expr, lookups.Lookup):
-            return self._build_object_filter(filter_expr)
+            return QueryObjectLookupHelper(self).build_filter(filter_expr)
         elif isinstance(filter_expr, expressions.Expression):
             raise FieldError("Can't build filter upon Expression, not wrapped with Lookup")
         else:
-            return self._build_kw_filter(filter_expr)
+            return QueryKeywordLookupHelper(self).build_filter(filter_expr)
 
     def _build_object_filter(self, lookup, branch_negated=False,
                              current_negated=False, can_reuse=None,
                              connector=AND, allow_joins=True, split_subq=True):
         pass
-
-    def _build_kw_filter(self, filter_expr, branch_negated=False,
-                         current_negated=False, can_reuse=None, connector=AND,
-                         allow_joins=True, split_subq=True):
-        arg, value = filter_expr
-        if not arg:
-            raise FieldError("Cannot parse keyword query %r" % arg)
-
-        lookups_list, parts, reffed_expression = self.solve_lookup_type(arg)
-        if not allow_joins and len(parts) > 1:
-            raise FieldError("Joined field references are not permitted in this query")
-
-        # Work out the lookup type and remove it from the end of 'parts',
-        # if necessary.
-        value, lookups_list, used_joins = self.prepare_lookup_value(value, lookups_list, can_reuse, allow_joins)
-
-        clause = self.where_class()
-        if reffed_expression:
-            condition = self.build_lookup(lookups_list, reffed_expression, value)
-            clause.add(condition, AND)
-            return clause, []
-
-        opts = self.get_meta()
-        alias = self.get_initial_alias()
-        allow_many = not branch_negated or not split_subq
-
-        try:
-            field, sources, opts, join_list, path = self.setup_joins(
-                parts, opts, alias, can_reuse=can_reuse, allow_many=allow_many)
-
-            # Prevent iterator from being consumed by check_related_objects()
-            if isinstance(value, Iterator):
-                value = list(value)
-            self.check_related_objects(field, value, opts)
-
-            # split_exclude() needs to know which joins were generated for the
-            # lookup parts
-            self._lookup_joins = join_list
-        except MultiJoin as e:
-            return self.split_exclude(filter_expr, LOOKUP_SEP.join(parts[:e.level]),
-                                      can_reuse, e.names_with_path)
-
-        if can_reuse is not None:
-            can_reuse.update(join_list)
-        used_joins = set(used_joins).union(set(join_list))
-        targets, alias, join_list = self.trim_joins(sources, join_list, path)
-
-        if field.is_relation:
-            # No support for transforms for relational fields
-            assert len(lookups_list) == 1
-            lookup_class = field.get_lookup(lookups_list[0])
-            if len(targets) == 1:
-                lhs = targets[0].get_col(alias, field)
-            else:
-                lhs = MultiColSource(alias, targets, sources, field)
-            condition = lookup_class(lhs, value)
-            lookup_type = lookup_class.lookup_name
-        else:
-            col = targets[0].get_col(alias, field)
-            condition = self.build_lookup(lookups_list, col, value)
-            lookup_type = condition.lookup_name
-
-        clause.add(condition, AND)
-
-        require_outer = lookup_type == 'isnull' and value is True and not current_negated
-        if current_negated and (lookup_type != 'isnull' or value is False):
-            require_outer = True
-            if (lookup_type != 'isnull' and (
-                    self.is_nullable(targets[0]) or
-                    self.alias_map[join_list[-1]].join_type == LOUTER)):
-                # The condition added here will be SQL like this:
-                # NOT (col IS NOT NULL), where the first NOT is added in
-                # upper layers of code. The reason for addition is that if col
-                # is null, then col != someval will result in SQL "unknown"
-                # which isn't the same as in Python. The Python None handling
-                # is wanted, and it can be gotten by
-                # (col IS NULL OR col != someval)
-                #   <=>
-                # NOT (col IS NOT NULL AND col = someval).
-                lookup_class = targets[0].get_lookup('isnull')
-                clause.add(lookup_class(targets[0].get_col(alias, sources[0]), False), AND)
-        return clause, used_joins if not require_outer else ()
 
     def add_filter(self, filter_clause):
         self.add_q(Q(**{filter_clause[0]: filter_clause[1]}))
