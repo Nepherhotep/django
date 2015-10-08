@@ -10,7 +10,6 @@ from __future__ import unicode_literals
 import inspect
 from collections import namedtuple
 
-import django
 from django.apps import apps
 from django.core.exceptions import FieldDoesNotExist, FieldError
 from django.db import connections
@@ -373,33 +372,7 @@ def check_rel_lookup_compatibility(model, target_opts, field):
 
 class QueryKeywordLookupHelper(object):
     def __init__(self, query):
-        """
-        :type query: django.models.db.query.Query
-        :return:
-        """
         self.query = query
-
-    def solve_lookup_type(self, lookup):
-        """
-        Solve the lookup type from the lookup (eg: 'foobar__id__icontains')
-        """
-        lookup_splitted = lookup.split(LOOKUP_SEP)
-        if self.query._annotations:
-            expression, expression_lookups = refs_expression(lookup_splitted,
-                                                             self.query.annotations)
-            if expression:
-                return expression_lookups, (), expression
-        _, field, _, lookup_parts = self.query.names_to_path(lookup_splitted,
-                                                             self.query.get_meta())
-        field_parts = lookup_splitted[0:len(lookup_splitted) - len(lookup_parts)]
-        if len(lookup_parts) == 0:
-            lookup_parts = ['exact']
-        elif len(lookup_parts) > 1:
-            if not field_parts:
-                raise FieldError(
-                    'Invalid lookup "%s" for model %s".' %
-                    (lookup, self.query.get_meta().model.__name__))
-        return lookup_parts, field_parts, False
 
     def build_filter(self, filter_expr, branch_negated=False,
                      current_negated=False, can_reuse=None, connector=AND,
@@ -418,8 +391,7 @@ class QueryKeywordLookupHelper(object):
 
         clause = self.query.where_class()
         if reffed_expression:
-            condition = self.build_lookup(lookups_list,
-                                                reffed_expression, value)
+            condition = self.build_lookup(lookups_list, reffed_expression, value)
             clause.add(condition, AND)
             return clause, []
 
@@ -489,6 +461,28 @@ class QueryKeywordLookupHelper(object):
                 clause.add(lookup_class(targets[0].get_col(alias, sources[0]),
                                         False), AND)
         return clause, used_joins if not require_outer else ()
+
+    def solve_lookup_type(self, lookup):
+        """
+        Solve the lookup type from the lookup (eg: 'foobar__id__icontains')
+        """
+        lookup_splitted = lookup.split(LOOKUP_SEP)
+        if self.query._annotations:
+            expression, expression_lookups = refs_expression(lookup_splitted,
+                                                             self.query.annotations)
+            if expression:
+                return expression_lookups, (), expression
+        _, field, _, lookup_parts = self.query.names_to_path(lookup_splitted,
+                                                             self.query.get_meta())
+        field_parts = lookup_splitted[0:len(lookup_splitted) - len(lookup_parts)]
+        if len(lookup_parts) == 0:
+            lookup_parts = ['exact']
+        elif len(lookup_parts) > 1:
+            if not field_parts:
+                raise FieldError(
+                    'Invalid lookup "%s" for model %s".' %
+                    (lookup, self.query.get_meta().model.__name__))
+        return lookup_parts, field_parts, False
 
     def prepare_lookup_value(self, value, lookups, can_reuse, allow_joins=True):
         # Default lookup if none given is exact.

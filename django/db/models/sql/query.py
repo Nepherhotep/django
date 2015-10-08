@@ -1064,16 +1064,18 @@ class Query(object):
             raise FieldError("Cannot parse keyword query as dict")
 
         if isinstance(filter_expr, lookups.Lookup):
-            return QueryObjectLookupHelper(self).build_filter(filter_expr)
+            helper = QueryObjectLookupHelper(self).build_filter(filter_expr)
+            return helper.build_filter(filter_expr, branch_negated,
+                                       current_negated, can_reuse, connector,
+                                       allow_joins, split_subq)
+
         elif isinstance(filter_expr, expressions.Expression):
             raise FieldError("Can't build filter upon Expression, not wrapped with Lookup")
         else:
-            return QueryKeywordLookupHelper(self).build_filter(filter_expr)
-
-    def _build_object_filter(self, lookup, branch_negated=False,
-                             current_negated=False, can_reuse=None,
-                             connector=AND, allow_joins=True, split_subq=True):
-        pass
+            helper = QueryKeywordLookupHelper(self)
+            return helper.build_filter(filter_expr, branch_negated,
+                                       current_negated, can_reuse, connector,
+                                       allow_joins, split_subq)
 
     def add_filter(self, filter_clause):
         self.add_q(Q(**{filter_clause[0]: filter_clause[1]}))
