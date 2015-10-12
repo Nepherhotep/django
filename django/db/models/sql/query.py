@@ -18,9 +18,8 @@ from django.db.models.aggregates import Count
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.expressions import Col, Ref
 from django.db.models.fields.related_lookups import MultiColSource
-from django.db.models.query_utils import (
-    Q, PathInfo, check_rel_lookup_compatibility, refs_expression,
-    QueryKeywordLookupHelper, QueryObjectLookupHelper)
+from django.db.models.query import QueryKeywordLookupHelper, QueryObjectLookupHelper
+from django.db.models.query_utils import Q, PathInfo, check_rel_lookup_compatibility
 from django.db.models.sql.constants import (
     INNER, LOUTER, ORDER_DIR, ORDER_PATTERN, QUERY_TERMS, SINGLE,
 )
