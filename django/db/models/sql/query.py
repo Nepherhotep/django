@@ -1934,6 +1934,7 @@ class QueryKeywordLookupHelper(object):
         if not arg:
             raise FieldError("Cannot parse keyword query %r" % arg)
 
+        # TODO: walk through child expression and get field parts
         lookups_list, parts, reffed_expression = self.solve_lookup_type(arg)
         if not allow_joins and len(parts) > 1:
             raise FieldError("Joined field references are not permitted in this query")
@@ -1944,6 +1945,7 @@ class QueryKeywordLookupHelper(object):
 
         clause = self.query.where_class()
         if reffed_expression:
+            # TODO: replace self.build_lookup by reusing passed lookup
             condition = self.build_lookup(lookups_list, reffed_expression, value)
             clause.add(condition, AND)
             return clause, []
@@ -2037,17 +2039,17 @@ class QueryKeywordLookupHelper(object):
                     (lookup, self.query.get_meta().model.__name__))
         return lookup_parts, field_parts, False
 
-    def prepare_lookup_value(self, value, lookups, can_reuse, allow_joins=True):
+    def prepare_lookup_value(self, value, lookups_list, can_reuse, allow_joins=True):
         # Default lookup if none given is exact.
         used_joins = []
-        if len(lookups) == 0:
-            lookups = ['exact']
+        if len(lookups_list) == 0:
+            lookups_list = ['exact']
         # Interpret '__exact=None' as the sql 'is NULL'; otherwise, reject all
         # uses of None as a query value.
         if value is None:
-            if lookups[-1] not in ('exact', 'iexact'):
+            if lookups_list[-1] not in ('exact', 'iexact'):
                 raise ValueError("Cannot use None as a query value")
-            lookups[-1] = 'isnull'
+            lookups_list[-1] = 'isnull'
             value = True
         elif hasattr(value, 'resolve_expression'):
             pre_joins = self.query.alias_refcount.copy()
@@ -2067,10 +2069,10 @@ class QueryKeywordLookupHelper(object):
         # stage. Using DEFAULT_DB_ALIAS isn't nice, but it is the best we
         # can do here. Similar thing is done in is_nullable(), too.
         if (connections[DEFAULT_DB_ALIAS].features.interprets_empty_strings_as_nulls and
-                lookups[-1] == 'exact' and value == ''):
+                lookups_list[-1] == 'exact' and value == ''):
             value = True
-            lookups[-1] = 'isnull'
-        return value, lookups, used_joins
+            lookups_list[-1] = 'isnull'
+        return value, lookups_list, used_joins
 
     def build_lookup(self, lookups_list, lhs, rhs):
         """
