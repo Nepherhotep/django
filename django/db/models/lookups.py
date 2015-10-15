@@ -60,9 +60,14 @@ class Lookup(Expression):
         return sqls, sqls_params
 
     def get_prep_lookup(self):
-        return self.lhs.output_field.get_prep_lookup(self.lookup_name, self.rhs)
+        if self.lookup_name:
+            return self.lhs.output_field.get_prep_lookup(self.lookup_name, self.rhs)
+        else:
+            # don't try to apply prep if lookup name doesn't exist
+            return self.rhs
 
     def get_db_prep_lookup(self, value, connection):
+        # TODO: fix it for empty lookup name
         return (
             '%s', self.lhs.output_field.get_db_prep_lookup(
                 self.lookup_name, value, connection, prepared=True))

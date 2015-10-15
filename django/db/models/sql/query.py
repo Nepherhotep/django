@@ -1052,7 +1052,7 @@ class Query(object):
             raise FieldError("Cannot parse keyword query as dict")
 
         if isinstance(filter_expr, lookups.Lookup):
-            helper = QueryObjectLookupHelper(self).build_filter(filter_expr)
+            helper = QueryObjectLookupHelper(self)
             return helper.build_filter(filter_expr, branch_negated,
                                        current_negated, can_reuse, connector,
                                        allow_joins, split_subq)
@@ -2110,4 +2110,10 @@ class QueryKeywordLookupHelper(object):
 
 
 class QueryObjectLookupHelper(QueryKeywordLookupHelper):
-    pass
+    def build_filter(self, expression, branch_negated=False,
+                     current_negated=False, can_reuse=None, connector=AND,
+                     allow_joins=True, split_subq=True):
+        """
+        :type expression: lookups.Lookup
+        """
+        print(expression.lhs, expression.rhs, expression.get_source_fields())

@@ -362,7 +362,6 @@ class Expression(BaseExpression, Combinable):
     """
     An expression that can be combined with other expressions.
     """
-    pass
 
 
 class CombinedExpression(Expression):
