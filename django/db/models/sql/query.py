@@ -2116,4 +2116,5 @@ class QueryObjectLookupHelper(QueryKeywordLookupHelper):
         """
         :type expression: lookups.Lookup
         """
+        # TODO: pass output field somehow to FieldExpression
         print(expression.lhs, expression.rhs, list(expression.get_source_fields()))

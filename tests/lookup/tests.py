@@ -757,6 +757,7 @@ class LookupTests(TestCase):
         Do sanity check
         :return:
         """
+        Article.objects.filter(pub_date__minute__gte=0)
         lookup = lookups.GreaterThan(F('id'), Value(5))
         self.assertQuerysetEqual(
             Article.objects.filter(lookup),
