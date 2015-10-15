@@ -1,4 +1,5 @@
 from copy import copy
+import itertools
 
 from django.conf import settings
 from django.db.models.expressions import Func, Value, Expression, F, FieldExpression
@@ -126,6 +127,12 @@ class Lookup(Expression):
     @cached_property
     def contains_aggregate(self):
         return self.lhs.contains_aggregate or getattr(self.rhs, 'contains_aggregate', False)
+
+    def get_source_expressions(self):
+        return itertools.chain(self.lhs.get_source_expressions(), self.rhs.get_source_expressions())
+
+    def get_source_fields(self):
+        return itertools.chain(self.lhs.get_source_fields(), self.rhs.get_source_fields())
 
 
 class Transform(RegisterLookupMixin, Func):

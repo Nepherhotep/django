@@ -677,6 +677,9 @@ class FieldExpression(Expression):
     def as_sql(self, compiler, connection):
         return self.template % self._f_object.resolve_expression(compiler.query), []
 
+    def get_source_fields(self):
+        return [self._f_object]
+
 
 class Ref(Expression):
     """
