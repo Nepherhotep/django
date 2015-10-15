@@ -131,9 +131,6 @@ class Lookup(Expression):
     def get_source_expressions(self):
         return itertools.chain(self.lhs.get_source_expressions(), self.rhs.get_source_expressions())
 
-    def get_source_fields(self):
-        return itertools.chain(self.lhs.get_source_fields(), self.rhs.get_source_fields())
-
 
 class Transform(RegisterLookupMixin, Func):
     """
