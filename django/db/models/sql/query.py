@@ -213,6 +213,9 @@ class Query(object):
             self._annotations = OrderedDict()
         return self._annotations
 
+    def has_annotations(self):
+        return bool(self._annotations)
+
     def __str__(self):
         """
         Returns the query as a string of SQL with the parameter values
@@ -1925,6 +1928,9 @@ class JoinPromoter(object):
 
 class QueryKeywordLookupHelper(object):
     def __init__(self, query):
+        """
+        :type query: Query
+        """
         self.query = query
 
     def build_filter(self, filter_expr, branch_negated=False,
@@ -1945,7 +1951,8 @@ class QueryKeywordLookupHelper(object):
 
         clause = self.query.where_class()
         if reffed_expression:
-            # TODO: replace self.build_lookup by reusing passed lookup
+            # TODO: replace self.build_lookup by reusing passed lookup,
+            # if variable overriding above allows it
             condition = self.build_lookup(lookups_list, reffed_expression, value)
             clause.add(condition, AND)
             return clause, []
@@ -2022,7 +2029,7 @@ class QueryKeywordLookupHelper(object):
         Solve the lookup type from the lookup (eg: 'foobar__id__icontains')
         """
         lookup_splitted = lookup.split(LOOKUP_SEP)
-        if self.query._annotations:
+        if self.query.has_annotations():
             expression, expression_lookups = refs_expression(lookup_splitted,
                                                              self.query.annotations)
             if expression:
