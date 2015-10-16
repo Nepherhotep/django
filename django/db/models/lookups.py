@@ -222,6 +222,11 @@ Field.register_lookup(IExact)
 
 class GreaterThan(BuiltinLookup):
     lookup_name = 'gt'
+
+    def as_sql(self, compiler, connection):
+        result = super(GreaterThan, self).as_sql(compiler, connection)
+        return result
+
 Field.register_lookup(GreaterThan)
 
 

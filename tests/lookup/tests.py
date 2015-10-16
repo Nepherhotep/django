@@ -759,7 +759,7 @@ class LookupTests(TestCase):
         """
         lookup = lookups.GreaterThan(F('id'), Value(5))
         queryset = Article.objects.filter(lookup)
-        self.assertQuerysetEqual(queryset, ['<Article: Article 6>'])
+        self.assertQuerysetEqual(queryset, ['<Article: Article 6>',  '<Article: Article 7>'])
 
 
 class LookupTransactionTests(TransactionTestCase):

@@ -664,7 +664,6 @@ class FieldExpression(Expression):
     """
     Does nothing, but showing field
     """
-    template = '{}'
 
     def __init__(self, f_object, output_field):
         self._f_object = f_object
@@ -672,8 +671,7 @@ class FieldExpression(Expression):
 
     def as_sql(self, compiler, connection):
         col = self._f_object.resolve_expression(compiler.query)
-        sql = self.template.format(compiler.compile(col))
-        return sql, []
+        return compiler.compile(col)
 
 
 class Ref(Expression):
