@@ -671,9 +671,8 @@ class FieldExpression(Expression):
         super(Expression, self).__init__(output_field=output_field)
 
     def as_sql(self, compiler, connection):
-        field = self._f_object.resolve_expression(compiler.query)
-        sql = self.template.format(field)
-        print(sql)
+        col = self._f_object.resolve_expression(compiler.query)
+        sql = self.template.format(compiler.compile(col))
         return sql, []
 
 
