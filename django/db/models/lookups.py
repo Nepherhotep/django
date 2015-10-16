@@ -141,10 +141,7 @@ class Lookup(Expression):
         return cols
 
     def as_sql(self, compiler, connection):
-        lhs_sql, params = self.process_lhs(compiler, connection)
-        rhs_sql, rhs_params = self.process_rhs(compiler, connection)
-        params.extend(rhs_params)
-        return '%s %s' % (lhs_sql, rhs_sql), params
+        raise NotImplementedError
 
     @cached_property
     def contains_aggregate(self):
