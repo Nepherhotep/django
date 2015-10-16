@@ -16,8 +16,12 @@ class Lookup(Expression):
     lookup_name = None
 
     def __init__(self, lhs, rhs):
-        self.lhs, self.rhs = self.cast_lhs_type(lhs), rhs
-        self.rhs = self.get_prep_lookup()
+        self.lhs = lhs
+        self.rhs = rhs
+
+        if hasattr(self.lhs, 'output_field'):
+            self.rhs = self.get_prep_lookup()
+
         if hasattr(self.lhs, 'get_bilateral_transforms'):
             bilateral_transforms = self.lhs.get_bilateral_transforms()
         else:
@@ -31,11 +35,15 @@ class Lookup(Expression):
                 raise NotImplementedError("Bilateral transformations on nested querysets are not supported.")
         self.bilateral_transforms = bilateral_transforms
 
-    def cast_lhs_type(self, lhs):
-        if isinstance(lhs, F):
-            # wrap F object as field expression
-            return FieldExpression(lhs)
-        return lhs
+    def apply_lookup(self, output_field):
+        """
+        Set output field for lhs and call all the required handlers (preps)
+        """
+        for e in itertools.chain([self.lhs], self.get_source_expressions()):
+            if isinstance(e, F):
+                e.output_field = output_field
+
+        self.rhs = self.get_prep_lookup()
 
     def apply_bilateral_transforms(self, value):
         for transform in self.bilateral_transforms:

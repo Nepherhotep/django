@@ -1947,7 +1947,10 @@ class QueryKeywordLookupHelper(object):
 
         # Work out the lookup type and remove it from the end of 'parts',
         # if necessary.
-        value, lookups_list, used_joins = self.prepare_lookup_value(value, lookups_list, can_reuse, allow_joins)
+        value, lookups_list, used_joins = self.prepare_lookup_value(value,
+                                                                    lookups_list,
+                                                                    can_reuse,
+                                                                    allow_joins)
 
         clause = self.query.where_class()
         if reffed_expression:
@@ -2110,11 +2113,9 @@ class QueryKeywordLookupHelper(object):
 
 
 class QueryObjectLookupHelper(QueryKeywordLookupHelper):
-    def build_filter(self, expression, branch_negated=False,
-                     current_negated=False, can_reuse=None, connector=AND,
-                     allow_joins=True, split_subq=True):
-        """
-        :type expression: lookups.Lookup
-        """
-        # TODO: pass output field somehow to FieldExpression
-        print(expression.lhs, expression.rhs, list(expression.get_source_fields()))
+        def build_filter(self, expression, branch_negated=False,
+                         current_negated=False, can_reuse=None, connector=AND,
+                         allow_joins=True, split_subq=True):
+            """
+            :type expression: lookups.Lookup
+            """
