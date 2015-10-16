@@ -8,6 +8,7 @@ from unittest import skipUnless
 from django.core.exceptions import FieldError
 from django.db import connection
 from django.db.models import lookups, F, Value, Count
+from django.db.models.functions import Upper, Lower
 from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
 
 from .models import Article, Author, Game, MyISAMArticle, Player, Season, Tag
@@ -753,13 +754,14 @@ class LookupTests(TestCase):
         )
 
     def test_direct_lookup_init(self):
-        """
-        Do sanity check
-        :return:
-        """
         lookup = lookups.GreaterThan(F('id'), Value(5))
         queryset = Article.objects.filter(lookup)
         self.assertQuerysetEqual(queryset, ['<Article: Article 6>',  '<Article: Article 7>'])
+
+    def test_direct_lookup_with_transform(self):
+        lookup = lookups.Contains(Upper(Lower(Upper(F('headline')))), 'FOOBAR')
+        queryset = Article.objects.filter(lookup)
+        self.assertQuerysetEqual(queryset, ['<Article: Article 6>'])
 
 
 class LookupTransactionTests(TransactionTestCase):

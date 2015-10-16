@@ -19,13 +19,11 @@ class Lookup(Expression):
     def __init__(self, lhs, rhs):
         self.lhs = None
         self.f_object = None
-        if isinstance(lhs, F):
-            self.f_object = lhs
-        else:
-            self.lhs = lhs
+
+        self.set_lhs_field(lhs)
         self.rhs = rhs
 
-        if self.lhs:
+        if not self.f_object:
             self.rhs = self.get_prep_lookup()
 
         if hasattr(self.lhs, 'get_bilateral_transforms'):
@@ -41,6 +39,20 @@ class Lookup(Expression):
                 raise NotImplementedError("Bilateral transformations on nested querysets are not supported.")
         self.bilateral_transforms = bilateral_transforms
 
+    def set_lhs_field(self, lhs):
+        """
+        Set lhs of f_object attribute depending on lhs parameter type
+        """
+        self.lhs = lhs
+        # traverse sources and save f object, if available
+        if hasattr(lhs, 'get_source_expressions'):
+            for source in lhs.get_source_expressions():
+                if isinstance(source, F):
+                    self.f_object = source
+                    break
+        else:
+            self.f_object = lhs
+
     def get_lhs_field(self):
         if self.f_object:
             return self.f_object
@@ -51,7 +63,10 @@ class Lookup(Expression):
         """
         Set output field for lhs and call all the required handlers (preps)
         """
-        if self.f_object:
+        if self.lhs:
+            print(self.lhs)
+            print(self.lhs.get_source_expressions())
+        else:
             self.lhs = FieldExpression(self.f_object, output_field)
 
         self.rhs = self.get_prep_lookup()
@@ -222,11 +237,6 @@ Field.register_lookup(IExact)
 
 class GreaterThan(BuiltinLookup):
     lookup_name = 'gt'
-
-    def as_sql(self, compiler, connection):
-        result = super(GreaterThan, self).as_sql(compiler, connection)
-        return result
-
 Field.register_lookup(GreaterThan)
 
 
@@ -323,6 +333,13 @@ class Contains(PatternLookup):
         if params and not self.bilateral_transforms:
             params[0] = "%%%s%%" % connection.ops.prep_for_like_query(params[0])
         return rhs, params
+
+    def as_sql(self, compiler, connection):
+        result = super(Contains, self).as_sql(compiler, connection)
+        # TODO: don't forget to remove debug method
+        print('Contains.as_sql', result)
+        return result
+
 Field.register_lookup(Contains)
 
 
