@@ -7,7 +7,7 @@ from unittest import skipUnless
 
 from django.core.exceptions import FieldError
 from django.db import connection
-from django.db.models import lookups, F, Value
+from django.db.models import lookups, F, Value, Count
 from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
 
 from .models import Article, Author, Game, MyISAMArticle, Player, Season, Tag
@@ -757,12 +757,9 @@ class LookupTests(TestCase):
         Do sanity check
         :return:
         """
-        Article.objects.filter(pub_date__minute__gte=0)
         lookup = lookups.GreaterThan(F('id'), Value(5))
-        self.assertQuerysetEqual(
-            Article.objects.filter(lookup),
-            ['<Article: Article 6>']
-        )
+        queryset = Article.objects.filter(lookup)
+        self.assertQuerysetEqual(queryset, ['<Article: Article 6>'])
 
 
 class LookupTransactionTests(TransactionTestCase):

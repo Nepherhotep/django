@@ -2,7 +2,8 @@ from copy import copy
 import itertools
 
 from django.conf import settings
-from django.db.models.expressions import Func, Value, Expression, F, FieldExpression
+from django.db.models.expressions import Func, Value, Expression, F, FieldExpression, \
+    ExpressionWrapper
 from django.db.models.fields import (
     DateField, DateTimeField, Field, IntegerField, TimeField,
 )
@@ -16,10 +17,15 @@ class Lookup(Expression):
     lookup_name = None
 
     def __init__(self, lhs, rhs):
-        self.lhs = lhs
+        self.lhs = None
+        self.f_object = None
+        if isinstance(lhs, F):
+            self.f_object = lhs
+        else:
+            self.lhs = lhs
         self.rhs = rhs
 
-        if hasattr(self.lhs, 'output_field'):
+        if self.lhs:
             self.rhs = self.get_prep_lookup()
 
         if hasattr(self.lhs, 'get_bilateral_transforms'):
@@ -35,13 +41,18 @@ class Lookup(Expression):
                 raise NotImplementedError("Bilateral transformations on nested querysets are not supported.")
         self.bilateral_transforms = bilateral_transforms
 
+    def get_lhs_field(self):
+        if self.f_object:
+            return self.f_object
+        else:
+            return self.lhs.get_source_fields()[0]
+
     def apply_lookup(self, output_field):
         """
         Set output field for lhs and call all the required handlers (preps)
         """
-        for e in itertools.chain([self.lhs], self.get_source_expressions()):
-            if isinstance(e, F):
-                e.output_field = output_field
+        if self.f_object:
+            self.lhs = FieldExpression(self.f_object, output_field)
 
         self.rhs = self.get_prep_lookup()
 
@@ -137,7 +148,11 @@ class Lookup(Expression):
         return self.lhs.contains_aggregate or getattr(self.rhs, 'contains_aggregate', False)
 
     def get_source_expressions(self):
-        return itertools.chain(self.lhs.get_source_expressions(), self.rhs.get_source_expressions())
+        if hasattr(self.lhs, 'get_source_expressions'):
+            head = self.lhs.get_source_expressions()
+        else:
+            head = []
+        return itertools.chain(head, self.rhs.get_source_expressions())
 
 
 class Transform(RegisterLookupMixin, Func):

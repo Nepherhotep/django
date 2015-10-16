@@ -664,21 +664,17 @@ class FieldExpression(Expression):
     """
     Does nothing, but showing field
     """
-    template = '%(output_field)s'
+    template = '{}'
 
-    def __init__(self, f_object):
-        """
-        :type f_object: F
-        """
-        super(Expression, self).__init__()
+    def __init__(self, f_object, output_field):
         self._f_object = f_object
-        self._output_field = fields.Field()
+        super(Expression, self).__init__(output_field=output_field)
 
     def as_sql(self, compiler, connection):
-        return self.template % self._f_object.resolve_expression(compiler.query), []
-
-    def get_source_fields(self):
-        return [self._f_object]
+        field = self._f_object.resolve_expression(compiler.query)
+        sql = self.template.format(field)
+        print(sql)
+        return sql, []
 
 
 class Ref(Expression):

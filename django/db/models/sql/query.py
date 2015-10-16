@@ -18,6 +18,7 @@ from django.db.models.aggregates import Count
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.expressions import Col, Ref
 from django.db.models.fields.related_lookups import MultiColSource
+from django.db.models.lookups import IsNull
 from django.db.models.query_utils import Q, PathInfo, check_rel_lookup_compatibility, \
     refs_expression
 from django.db.models.sql.constants import (
@@ -1936,27 +1937,29 @@ class QueryKeywordLookupHelper(object):
     def build_filter(self, filter_expr, branch_negated=False,
                      current_negated=False, can_reuse=None, connector=AND,
                      allow_joins=True, split_subq=True):
-        arg, value = filter_expr
-        if not arg:
-            raise FieldError("Cannot parse keyword query %r" % arg)
 
-        # TODO: walk through child expression and get field parts
-        lookups_list, parts, reffed_expression = self.solve_lookup_type(arg)
+        if isinstance(filter_expr, tuple):
+            arg = filter_expr[0]
+            value = filter_expr[1]
+        else:
+            lookup = filter_expr
+            arg = lookup
+            value = lookup.rhs
+
+        lookup_parts, parts, reffed_expression = self.solve_lookup_type(arg)
         if not allow_joins and len(parts) > 1:
             raise FieldError("Joined field references are not permitted in this query")
 
         # Work out the lookup type and remove it from the end of 'parts',
         # if necessary.
-        value, lookups_list, used_joins = self.prepare_lookup_value(value,
-                                                                    lookups_list,
+        value, lookup_parts, used_joins = self.prepare_lookup_value(value,
+                                                                    lookup_parts,
                                                                     can_reuse,
                                                                     allow_joins)
 
         clause = self.query.where_class()
         if reffed_expression:
-            # TODO: replace self.build_lookup by reusing passed lookup,
-            # if variable overriding above allows it
-            condition = self.build_lookup(lookups_list, reffed_expression, value)
+            condition = self.build_lookup(lookup_parts, reffed_expression, value)
             clause.add(condition, AND)
             return clause, []
 
@@ -1989,8 +1992,8 @@ class QueryKeywordLookupHelper(object):
 
         if field.is_relation:
             # No support for transforms for relational fields
-            assert len(lookups_list) == 1
-            lookup_class = field.get_lookup(lookups_list[0])
+            assert len(lookup_parts) == 1
+            lookup_class = field.get_lookup(lookup_parts[0])
             if len(targets) == 1:
                 lhs = targets[0].get_col(alias, field)
             else:
@@ -1999,7 +2002,7 @@ class QueryKeywordLookupHelper(object):
             lookup_type = lookup_class.lookup_name
         else:
             col = targets[0].get_col(alias, field)
-            condition = self.build_lookup(lookups_list, col, value)
+            condition = self.build_lookup(lookup_parts, col, value)
             lookup_type = condition.lookup_name
 
         clause.add(condition, AND)
@@ -2113,9 +2116,29 @@ class QueryKeywordLookupHelper(object):
 
 
 class QueryObjectLookupHelper(QueryKeywordLookupHelper):
-        def build_filter(self, expression, branch_negated=False,
-                         current_negated=False, can_reuse=None, connector=AND,
-                         allow_joins=True, split_subq=True):
+        def solve_lookup_type(self, lookup):
+            field = lookup.get_lhs_field()
+            parts = field.name.split(LOOKUP_SEP)
+            _, field, _, lookup_parts = self.query.names_to_path(parts, self.query.get_meta())
+            lookup.apply_lookup(field)
+            return lookup, parts, False
+
+        def prepare_lookup_value(self, value, lookup, can_reuse, allow_joins=True):
+            lookups_list = [lookup.lookup_name]
+            value, new_lookups_list, used_joins = super(QueryObjectLookupHelper, self)\
+                .prepare_lookup_value(value, lookups_list, can_reuse, allow_joins)
+            if not new_lookups_list == lookups_list:
+                lookup_name = new_lookups_list[0]
+                if lookup_name == 'isnull':
+                    lookup = IsNull(lookup.lhs, lookup.rhs)
+                else:
+                    # TODO: can use build_lookup function, but need to make sure output_field
+                    # is already set in lhs
+                    raise RuntimeError("Can't process overridden lookup")
+            return value, lookup, used_joins
+
+        def build_lookup(self, lookup, lhs, rhs):
             """
-            :type expression: lookups.Lookup
+            Lookup is prepared by that time in object lookup helper
             """
+            return lookup
