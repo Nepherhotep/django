@@ -760,6 +760,17 @@ class ObjectLookupTests(LookupTests):
         queryset = Article.objects.filter(lookup)
         self.assertQuerysetEqual(queryset, ['<Article: Article 6>',  '<Article: Article 7>'])
 
+    def test_lookup_with_no_name(self):
+        class CustomGreaterThanLookup(lookups.GreaterThan):
+            lookup_name = None
+
+            def get_rhs_op(self, connect, rhs):
+                return '> {}'.format(rhs)
+
+        lookup = CustomGreaterThanLookup(F('id'), Value(5))
+        queryset = Article.objects.filter(lookup)
+        self.assertQuerysetEqual(queryset, ['<Article: Article 6>',  '<Article: Article 7>'])
+
     def test_direct_lookup_with_transform(self):
         lookup = lookups.Contains(Upper(Lower(Upper(F('headline')))), 'ARTICLE 5')
         queryset = Article.objects.filter(lookup)
