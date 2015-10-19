@@ -2066,17 +2066,17 @@ class QueryKeywordLookupHelper(object):
             value = True
         elif hasattr(value, 'resolve_expression'):
             pre_joins = self.query.alias_refcount.copy()
-            value = value.resolve_expression(self, reuse=can_reuse, allow_joins=allow_joins)
+            value = value.resolve_expression(self.query, reuse=can_reuse, allow_joins=allow_joins)
             used_joins = [k for k, v in self.query.alias_refcount.items() if v > pre_joins.get(k, 0)]
         # Subqueries need to use a different set of aliases than the
         # outer query. Call bump_prefix to change aliases of the inner
         # query (the value).
         if hasattr(value, 'query') and hasattr(value.query, 'bump_prefix'):
             value = value._clone()
-            value.query.bump_prefix(self)
+            value.query.bump_prefix(self.query)
         if hasattr(value, 'bump_prefix'):
             value = value.clone()
-            value.bump_prefix(self)
+            value.bump_prefix(self.query)
         # For Oracle '' is equivalent to null. The check needs to be done
         # at this stage because join promotion can't be done at compiler
         # stage. Using DEFAULT_DB_ALIAS isn't nice, but it is the best we
@@ -2117,7 +2117,7 @@ class QueryKeywordLookupHelper(object):
 
 class QueryObjectLookupHelper(QueryKeywordLookupHelper):
         def solve_lookup_type(self, lookup):
-            field = lookup.get_lhs_field()
+            field = lookup.get_source_f_object()
             parts = field.name.split(LOOKUP_SEP)
             _, field, _, lookup_parts = self.query.names_to_path(parts, self.query.get_meta())
             lookup.apply_lookup(field)
@@ -2132,8 +2132,7 @@ class QueryObjectLookupHelper(QueryKeywordLookupHelper):
                 if lookup_name == 'isnull':
                     lookup = IsNull(lookup.lhs, lookup.rhs)
                 else:
-                    # TODO: can use build_lookup function, but need to make sure output_field
-                    # is already set in lhs
+                    # lookup replacement makes sense only for exact -> isnull case
                     raise RuntimeError("Can't process overridden lookup")
             return value, lookup, used_joins
 
