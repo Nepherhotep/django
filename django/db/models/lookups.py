@@ -84,7 +84,7 @@ class Lookup(Expression):
         if self.lookup_name:
             return self.lhs.output_field.get_prep_lookup(self.lookup_name, self.rhs)
         else:
-            # don't try to apply prep if lookup name doesn't exist
+            # don't apply preps if lookup name doesn't exist
             return self.rhs
 
     def get_db_prep_lookup(self, value, connection):

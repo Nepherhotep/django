@@ -2131,8 +2131,7 @@ class QueryObjectLookupHelper(QueryKeywordLookupHelper):
                 if lookup_name == 'isnull':
                     lookup = IsNull(lookup.lhs, lookup.rhs)
                 else:
-                    # TODO: can use build_lookup function, but need to make sure output_field
-                    # is already set in lhs
+                    # lookup replacement makes sense only for exact -> isnull case
                     raise RuntimeError("Can't process overridden lookup")
             return value, lookup, used_joins
 
